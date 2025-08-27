@@ -1,0 +1,21 @@
+.grid-2{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:12px;
+}
+@media(max-width:900px){
+  .grid-2{ grid-template-columns:1fr; }
+}
+
+#tbl_bano{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  margin-top:8px;
+}
+#tbl_bano > div{
+  padding:8px;
+  background:#fff;
+  border-radius:8px;
+  border:1px solid #e6eaf0;
+}

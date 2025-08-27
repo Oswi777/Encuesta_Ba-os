@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Reporte Baño – {{ bano['nombre'] }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/brand.css') }}">
+<script defer src="{{ url_for('static', filename='js/qr.js') }}"></script>
+</head>
+<body class="bg">
+  <div class="wrap">
+    <header class="head">
+      <h1>Baño: {{ bano['nombre'] }}</h1>
+      <div class="muted">Zona: {{ bano['zona'] }} · Piso: {{ bano['piso'] }} · {{ bano['sexo'] }}</div>
+    </header>
+
+    <section class="card">
+      <form id="f" enctype="multipart/form-data">
+        <input type="hidden" name="id_bano" value="{{ bano['id'] }}">
+        <input type="hidden" id="categoria" name="categoria" value="">
+
+        <div class="grid">
+          <button type="button" class="chip" data-val="sucio">Sucio</button>
+          <button type="button" class="chip" data-val="falta_papel">Falta papel</button>
+          <button type="button" class="chip" data-val="falta_jabon">Falta jabón</button>
+          <button type="button" class="chip" data-val="fuga_agua">Fuga de agua</button>
+          <button type="button" class="chip" data-val="mal_olor">Mal olor</button>
+          <button type="button" class="chip" data-val="otro">Otro</button>
+        </div>
+
+        <label class="muted">Comentario (opcional)</label>
+        <textarea name="comentario" rows="3" class="input" placeholder="Describe brevemente..."></textarea>
+
+        <div class="row">
+          <label class="muted">Foto (opcional)</label>
+          <input class="input" type="file" name="foto" accept="image/*" capture="environment">
+        </div>
+
+        <button class="btn" id="btnEnviar" type="submit" disabled>Enviar reporte</button>
+        <div id="status" class="muted" style="margin-top:10px;"></div>
+      </form>
+    </section>
+    <footer class="foot">Gracias por ayudarnos a mantener este baño en buen estado.</footer>
+  </div>
+</body>
+</html>

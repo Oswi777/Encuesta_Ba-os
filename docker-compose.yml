@@ -1,0 +1,13 @@
+services:
+  banos:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/banos.db
+      - UPLOAD_FOLDER=/app/uploads
+      - SECRET_KEY=${SECRET_KEY:-change-me}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./banos.db:/app/banos.db
+    restart: unless-stopped
