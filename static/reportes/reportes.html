@@ -4,13 +4,15 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Reportes – Baños</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/brand.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='reportes/assets/css/reportes.css') }}">
+
+  <!-- USA RUTAS ABSOLUTAS, NO JINJA -->
+  <link rel="stylesheet" href="/static/css/brand.css">
+  <link rel="stylesheet" href="/static/reportes/assets/css/reportes.css">
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script defer src="{{ url_for('static', filename='reportes/assets/js/config.js') }}"></script>
-  <script type="module" defer src="{{ url_for('static', filename='reportes/assets/js/reportes.js') }}"></script>
+  <script defer src="/static/reportes/assets/js/config.js"></script>
+  <!-- ES módulo para que funcione el import './utils.js' -->
+  <script type="module" defer src="/static/reportes/assets/js/reportes.js"></script>
 </head>
 <body class="bg">
   <div class="wrap">
