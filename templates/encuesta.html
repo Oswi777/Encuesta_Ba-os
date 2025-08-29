@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no" />
+<title>Encuesta – Selecciona Baño</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/brand.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='reportes/assets/css/reportes.css') }}">
+<script defer src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
+<style>
+/* Unos toques para kiosco */
+.kiosk-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.kiosk-grid{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:10px; }
+.kiosk-item{ padding:14px; background:#fff; border:2px solid #e3e8ef; border-radius:12px; cursor:pointer; }
+.kiosk-item:active{ transform:scale(.99); }
+.kiosk-item small{ color:var(--muted); display:block; margin-top:2px; }
+.kiosk-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+.kiosk-search{ display:flex; gap:8px; align-items:center; }
+.kiosk-search input{ min-width:0; }
+.kiosk-badge{ padding:4px 8px; background:#eef6ff; border:1px solid #d6eaff; border-radius:999px; font-size:.85rem; }
+
+@media (min-width:700px){
+  .kiosk-grid{ grid-template-columns:repeat(2,1fr); }
+}
+@media (min-width:1000px){
+  .kiosk-grid{ grid-template-columns:repeat(3,1fr); }
+}
+.hidden{ display:none !important; }
+</style>
+</head>
+<body class="bg">
+  <div class="wrap">
+    <header class="head kiosk-header">
+      <div>
+        <h1>Encuesta – Selecciona el baño</h1>
+        <div class="muted">Si este equipo no tiene QR, elige el baño para calificar.</div>
+      </div>
+      <a class="btn small" href="/reportes" style="text-decoration:none">Ver reportes</a>
+    </header>
+
+    <!-- Selector de baño -->
+    <section class="card">
+      <div class="kiosk-actions">
+        <label>Zona
+          <select id="f_zona">
+            <option value="">Todas</option>
+          </select>
+        </label>
+        <label>Sexo
+          <select id="f_sexo">
+            <option value="">Todos</option>
+            <option value="Hombres">Hombres</option>
+            <option value="Mujeres">Mujeres</option>
+            <option value="Unisex">Unisex</option>
+          </select>
+        </label>
+        <div class="kiosk-search" style="flex:1">
+          <input id="q" class="input" placeholder="Buscar por nombre / piso / ID" />
+          <button id="reset" class="btn small" type="button">Limpiar</button>
+        </div>
+      </div>
+
+      <div id="banos_grid" class="kiosk-grid" aria-live="polite"></div>
+      <div id="sin_resultados" class="muted hidden" style="margin-top:8px;">Sin resultados…</div>
+    </section>
+
+    <!-- Formulario (idéntico al de QR) -->
+    <section id="sec_form" class="card hidden">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div>
+          <div class="muted">Calificando:</div>
+          <div id="bano_sel" class="kiosk-badge">—</div>
+        </div>
+        <button id="cambiar" class="btn small" type="button">Cambiar baño</button>
+      </div>
+
+      <form id="f" enctype="multipart/form-data" style="margin-top:10px;">
+        <input type="hidden" name="id_bano" id="id_bano" value="">
+        <input type="hidden" id="categoria" name="categoria" value="">
+        <div class="grid">
+          <button type="button" class="chip" data-val="sucio">Sucio</button>
+          <button type="button" class="chip" data-val="falta_papel">Falta papel</button>
+          <button type="button" class="chip" data-val="falta_jabon">Falta jabón</button>
+          <button type="button" class="chip" data-val="fuga_agua">Fuga de agua</button>
+          <button type="button" class="chip" data-val="mal_olor">Mal olor</button>
+          <button type="button" class="chip" data-val="otro">Otro</button>
+        </div>
+
+        <label class="muted">Comentario (opcional)</label>
+        <textarea name="comentario" rows="3" class="input" placeholder="Describe brevemente..."></textarea>
+
+        <div class="row">
+          <label class="muted">Foto (opcional)</label>
+          <input class="input" type="file" name="foto" accept="image/*" capture="environment">
+        </div>
+
+        <button class="btn" id="btnEnviar" type="submit" disabled>Enviar reporte</button>
+        <div id="status" class="muted" style="margin-top:10px;"></div>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

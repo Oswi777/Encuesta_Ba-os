@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="es">
+
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Reportes – Baños</title>
 
   <!-- USA RUTAS ABSOLUTAS, NO JINJA -->
@@ -14,6 +15,7 @@
   <!-- ES módulo para que funcione el import './utils.js' -->
   <script type="module" defer src="/static/reportes/assets/js/reportes.js"></script>
 </head>
+
 <body class="bg">
   <div class="wrap">
     <header class="head">
@@ -21,12 +23,12 @@
       <div class="filters">
         <label>Desde <input id="desde" type="date"></label>
         <label>Hasta <input id="hasta" type="date"></label>
-        <label>Zona 
+        <label>Zona
           <select id="f_zona">
             <option value="">Todas</option>
           </select>
         </label>
-        <label>Baño 
+        <label>Baño
           <select id="f_bano">
             <option value="">Todos</option>
           </select>
@@ -36,10 +38,16 @@
     </header>
 
     <section class="kpis">
-      <div class="kpi"><div class="kpi-val" id="k_total">0</div><div class="kpi-label">Reportes</div></div>
-      <div class="kpi"><div class="kpi-val" id="k_abiertos">0</div><div class="kpi-label">Abiertos</div></div>
-      <div class="kpi"><div class="kpi-val" id="k_top_bano">—</div><div class="kpi-label">Baño con más incidencias</div></div>
+      <div class="kpi">
+        <div class="kpi-val" id="k_total">0</div>
+        <div class="kpi-label">Reportes</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" id="k_top_bano">—</div>
+        <div class="kpi-label">Baño con más incidencias</div>
+      </div>
     </section>
+
 
     <section class="card">
       <h2>Tendencia diaria</h2>
@@ -66,6 +74,35 @@
       <h2>Tabla rápida</h2>
       <div id="tbl_bano"></div>
     </section>
+
+    <section class="card" id="sec_hist">
+  <h2>Últimas respuestas</h2>
+  <div class="row" style="justify-content:space-between; gap:8px; margin:8px 0;">
+    <div class="muted" id="hist_info">—</div>
+    <div>
+      <button id="hist_prev" class="btn small" type="button">« Prev</button>
+      <button id="hist_next" class="btn small" type="button">Next »</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Fecha (Local)</th>
+          <th>Categoría</th>
+          <th>Baño</th>
+          <th>Zona</th>
+          <th>Piso</th>
+          <th>Sexo</th>
+          <th>Comentario</th>
+        </tr>
+      </thead>
+      <tbody id="hist_tbody"></tbody>
+    </table>
+  </div>
+</section>
+
   </div>
 </body>
+
 </html>

@@ -38,3 +38,16 @@
 /* Evita desbordes visuales */
 .card{ overflow:hidden; }
 
+.table-wrap{ width:100%; overflow:auto; }
+.tbl{ width:100%; border-collapse:separate; border-spacing:0; min-width:720px; }
+.tbl thead th{
+  text-align:left; padding:12px; background:#0f1a2a; color:#dbe4f0;
+  position:sticky; top:0; z-index:1; border-bottom:1px solid #203047; 
+  border-top-left-radius:8px;
+}
+.tbl thead th:last-child{ border-top-right-radius:8px; }
+.tbl tbody td{
+  padding:12px; border-bottom:1px solid #e6eaf0; background:#fff;
+}
+.tbl tbody tr:nth-child(odd) td{ background:#f9fbff; }
+.tbl tbody tr:hover td{ background:#eef6ff; }
