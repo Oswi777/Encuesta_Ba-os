@@ -15,14 +15,7 @@
       <h1> {{ bano['nombre'] }}</h1>
       <div class="muted">Zona: {{ bano['zona'] }} · Piso: {{ bano['piso'] }} · {{ bano['sexo'] }}</div>
     </header>
-  <style>
-    body.bg {
-      background-image: url("/static/assets/Gradient-45anglec.jpg");
-      background-size: cover;
-      background-repeat: no-repeat;
-      background-attachment: fixed;
-    }
-  </style>
+
     <section class="card">
       <form id="f" enctype="multipart/form-data">
         <input type="hidden" name="id_bano" value="{{ bano['id'] }}">

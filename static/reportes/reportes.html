@@ -6,20 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Reportes – Baños</title>
 
-  <!-- USA RUTAS ABSOLUTAS, NO JINJA -->
+  <!-- RUTAS ABSOLUTAS -->
   <link rel="stylesheet" href="/static/css/brand.css">
   <link rel="stylesheet" href="/static/reportes/assets/css/reportes.css">
 
-  <style>
-    body.bg {
-      background-image: url("/static/assets/Gradient-45anglec.jpg");
-      background-size: cover;
-      background-repeat: no-repeat;
-      background-attachment: fixed;
-    }
-  </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script defer src="/static/reportes/assets/js/config.js"></script>
   <!-- ES módulo para que funcione el import './utils.js' -->
   <script type="module" defer src="/static/reportes/assets/js/reportes.js"></script>
 </head>
@@ -56,7 +47,6 @@
       </div>
     </section>
 
-
     <section class="card">
       <h2>Tendencia diaria</h2>
       <canvas id="chartDia" height="140"></canvas>
@@ -78,39 +68,33 @@
       <canvas id="chartZona" height="140"></canvas>
     </section>
 
-    <section class="card">
-      <h2>Tabla rápida</h2>
-      <div id="tbl_bano"></div>
-    </section>
-
     <section class="card" id="sec_hist">
-  <h2>Últimas respuestas</h2>
-  <div class="row" style="justify-content:space-between; gap:8px; margin:8px 0;">
-    <div class="muted" id="hist_info">—</div>
-    <div>
-      <button id="hist_prev" class="btn small" type="button">« Prev</button>
-      <button id="hist_next" class="btn small" type="button">Next »</button>
-    </div>
-  </div>
-  <div class="table-wrap">
-    <table class="tbl">
-      <thead>
-        <tr>
-          <th>Fecha (Local)</th>
-          <th>Categoría</th>
-          <th>Baño</th>
-          <th>Zona</th>
-          <th>Piso</th>
-          <th>Sexo</th>
-          <th>Comentario</th>
-        </tr>
-      </thead>
-      <tbody id="hist_tbody"></tbody>
-    </table>
-  </div>
-</section>
+      <h2>Últimas respuestas</h2>
+      <div class="row" style="justify-content:space-between; gap:8px; margin:8px 0;">
+        <div class="muted" id="hist_info">—</div>
+        <div>
+          <button id="hist_prev" class="btn small" type="button">« Prev</button>
+          <button id="hist_next" class="btn small" type="button">Next »</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Fecha (Local)</th>
+              <th>Categoría</th>
+              <th>Baño</th>
+              <th>Zona</th>
+              <th>Piso</th>
+              <th>Sexo</th>
+              <th>Comentario</th>
+            </tr>
+          </thead>
+          <tbody id="hist_tbody"></tbody>
+        </table>
+      </div>
+    </section>
 
   </div>
 </body>
-
 </html>

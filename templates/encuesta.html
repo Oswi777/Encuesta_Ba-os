@@ -9,37 +9,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/brand.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='reportes/assets/css/reportes.css') }}">
 <script defer src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
-
-  <style>
-    body.bg {
-      background-image: url("/static/assets/Gradient-45anglec.jpg");
-      background-size: cover;
-      background-repeat: no-repeat;
-      background-attachment: fixed;
-    }
-  </style>
-
-
-<style>
-/* Unos toques para kiosco */
-.kiosk-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.kiosk-grid{ display:grid; grid-template-columns:1fr; gap:10px; margin-top:10px; }
-.kiosk-item{ padding:14px; background:#fff; border:2px solid #e3e8ef; border-radius:12px; cursor:pointer; }
-.kiosk-item:active{ transform:scale(.99); }
-.kiosk-item small{ color:var(--muted); display:block; margin-top:2px; }
-.kiosk-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
-.kiosk-search{ display:flex; gap:8px; align-items:center; }
-.kiosk-search input{ min-width:0; }
-.kiosk-badge{ padding:4px 8px; background:#eef6ff; border:1px solid #d6eaff; border-radius:999px; font-size:.85rem; }
-
-@media (min-width:700px){
-  .kiosk-grid{ grid-template-columns:repeat(2,1fr); }
-}
-@media (min-width:1000px){
-  .kiosk-grid{ grid-template-columns:repeat(3,1fr); }
-}
-.hidden{ display:none !important; }
-</style>
 </head>
 <body class="bg">
   <div class="wrap">
@@ -48,7 +17,6 @@
         <h1>Encuesta – Selecciona el baño</h1>
         <div class="muted">Si este equipo no tiene QR, elige el baño para calificar.</div>
       </div>
-      <!--<a class="btn small" href="/reportes" style="text-decoration:none">Ver reportes</a> -->
     </header>
 
     <!-- Selector de baño -->
@@ -102,10 +70,12 @@
         <label class="muted">Comentario (opcional)</label>
         <textarea name="comentario" rows="3" class="input" placeholder="Describe brevemente..."></textarea>
 
-       <!-- <div class="row"> 
+        <!--
+        <div class="row">
           <label class="muted">Foto (opcional)</label>
           <input class="input" type="file" name="foto" accept="image/*" capture="environment">
-        </div> -->
+        </div>
+        -->
 
         <button class="btn" id="btnEnviar" type="submit" disabled>Enviar reporte</button>
         <div id="status" class="muted" style="margin-top:10px;"></div>

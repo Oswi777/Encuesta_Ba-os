@@ -21,8 +21,8 @@ body{ font-family:Montserrat,system-ui,-apple-system,Segoe UI,Roboto; margin:0; 
 .bg{
   min-height:100vh;
   position:relative;
-  background: var(--bg) url("/static/assets/Gradient-45angle.png") center/cover no-repeat fixed;
-  /* Si tu imagen es .jpg o .webp, cambia la extensión de la URL ↑ */
+  background: var(--bg) url("/static/assets/Gradient-45anglec.jpg") center/cover no-repeat fixed;
+  
 }
 
 /* Capa de suavizado para legibilidad sobre el gradient */

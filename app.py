@@ -8,15 +8,27 @@ def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.config["DATABASE_PATH"] = os.getenv("DATABASE_PATH", "banos.db")
     app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER", "uploads")
+    app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # 3 MB para uploads
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     def db():
-        conn = sqlite3.connect(app.config["DATABASE_PATH"])
+        conn = sqlite3.connect(
+            app.config["DATABASE_PATH"],
+            check_same_thread=False,
+            detect_types=sqlite3.PARSE_DECLTYPES
+        )
         conn.row_factory = sqlite3.Row
+        # Robustece SQLite (concurrencia moderada)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            pass
         return conn
 
     # ---- Helpers de fecha/Zona Horaria ----
-    DEFAULT_TZ = "America/Monterrey"
+    DEFAULT_TZ = os.getenv("DEFAULT_TZ", "America/Mexico_City")
 
     def get_tz_from_request():
         tz_str = (request.args.get("tz") or DEFAULT_TZ).strip()
@@ -36,6 +48,14 @@ def create_app():
         except ValueError:
             dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
         return dt.replace(tzinfo=datetime.timezone.utc)
+
+    # ---- Init schema idempotente al arrancar ----
+    try:
+        con = db(); cur = con.cursor()
+        cur.executescript(Path("schema.sql").read_text(encoding="utf-8"))
+        con.commit(); con.close()
+    except Exception as e:
+        app.logger.warning(f"Schema init warning: {e}")
 
     @app.route("/")
     def index():
@@ -67,6 +87,11 @@ def create_app():
         foto_url = None
         if "foto" in request.files and request.files["foto"].filename:
             f = request.files["foto"]
+            # valida extensión si habilitas fotos
+            allowed = {"png", "jpg", "jpeg", "webp"}
+            ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+            if ext not in allowed:
+                return jsonify({"ok": False, "error": "Extensión no permitida"}), 400
             ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S_")
             fname = ts + secure_filename(f.filename)
             fpath = os.path.join(app.config["UPLOAD_FOLDER"], fname)
@@ -151,7 +176,7 @@ def create_app():
                 dt_utc = parse_sqlite_ts_utc(it["creado_en"])
                 it["creado_local"] = dt_utc.astimezone(tzinfo).isoformat()
             except Exception:
-                it["creado_local"] = it["creado_en"]  # fallback si viniera en otro formato
+                it["creado_local"] = it["creado_en"]
             items.append(it)
 
         return jsonify({
@@ -159,7 +184,7 @@ def create_app():
             "items": items
         })
 
-    # ---------- API: KPIs con filtros (fechas por DÍA LOCAL) ----------
+    # ---------- API: KPIs ----------
     @app.route("/api/kpis")
     def kpis():
         desde = request.args.get("desde")
@@ -195,7 +220,7 @@ def create_app():
             por_bano[r["id_bano"]] = por_bano.get(r["id_bano"], 0) + 1
             por_zona[r["zona"]] = por_zona.get(r["zona"], 0) + 1
 
-            # agrupa por DÍA LOCAL (robusto a microsegundos)
+            # agrupa por DÍA LOCAL
             try:
                 dt_utc = parse_sqlite_ts_utc(r["creado_en"])
                 dloc = dt_utc.astimezone(tzinfo).date().isoformat()
@@ -222,7 +247,6 @@ def create_app():
     # --- Encuesta/kiosco sin QR ---
     @app.route("/encuesta")
     def encuesta_page():
-        # Página para iPad: el usuario elige el baño y luego reporta
         return render_template("encuesta.html")
 
     # ---------- Reportes (sirve el HTML estático) ----------

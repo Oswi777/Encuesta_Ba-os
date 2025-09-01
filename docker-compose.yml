@@ -7,6 +7,7 @@ services:
       - DATABASE_PATH=/app/banos.db
       - UPLOAD_FOLDER=/app/uploads
       - SECRET_KEY=${SECRET_KEY:-change-me}
+      - DEFAULT_TZ=${DEFAULT_TZ:-America/Mexico_City}
     volumes:
       - ./uploads:/app/uploads
       - ./banos.db:/app/banos.db
