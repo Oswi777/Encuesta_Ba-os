@@ -15,7 +15,14 @@
       <h1> {{ bano['nombre'] }}</h1>
       <div class="muted">Zona: {{ bano['zona'] }} · Piso: {{ bano['piso'] }} · {{ bano['sexo'] }}</div>
     </header>
-
+  <style>
+    body.bg {
+      background-image: url("/static/assets/Gradient-45anglec.jpg");
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+  </style>
     <section class="card">
       <form id="f" enctype="multipart/form-data">
         <input type="hidden" name="id_bano" value="{{ bano['id'] }}">
@@ -33,10 +40,10 @@
         <label class="muted">Comentario (opcional)</label>
         <textarea name="comentario" rows="3" class="input" placeholder="Describe brevemente..."></textarea>
 
-        <div class="row">
+       <!-- <div class="row">
           <label class="muted">Foto (opcional)</label>
           <input class="input" type="file" name="foto" accept="image/*" capture="environment">
-        </div>
+        </div> -->
 
         <button class="btn" id="btnEnviar" type="submit" disabled>Enviar reporte</button>
         <div id="status" class="muted" style="margin-top:10px;"></div>

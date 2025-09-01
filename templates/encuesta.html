@@ -9,6 +9,17 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/brand.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='reportes/assets/css/reportes.css') }}">
 <script defer src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
+
+  <style>
+    body.bg {
+      background-image: url("/static/assets/Gradient-45anglec.jpg");
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+  </style>
+
+
 <style>
 /* Unos toques para kiosco */
 .kiosk-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -37,7 +48,7 @@
         <h1>Encuesta – Selecciona el baño</h1>
         <div class="muted">Si este equipo no tiene QR, elige el baño para calificar.</div>
       </div>
-      <a class="btn small" href="/reportes" style="text-decoration:none">Ver reportes</a>
+      <!--<a class="btn small" href="/reportes" style="text-decoration:none">Ver reportes</a> -->
     </header>
 
     <!-- Selector de baño -->
@@ -91,10 +102,10 @@
         <label class="muted">Comentario (opcional)</label>
         <textarea name="comentario" rows="3" class="input" placeholder="Describe brevemente..."></textarea>
 
-        <div class="row">
+       <!-- <div class="row"> 
           <label class="muted">Foto (opcional)</label>
           <input class="input" type="file" name="foto" accept="image/*" capture="environment">
-        </div>
+        </div> -->
 
         <button class="btn" id="btnEnviar" type="submit" disabled>Enviar reporte</button>
         <div id="status" class="muted" style="margin-top:10px;"></div>

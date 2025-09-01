@@ -1,53 +1,38 @@
+/* Ajustes específicos del dashboard sobre el tema corporativo */
 .grid-2{
   display:grid;
   grid-template-columns:repeat(2,1fr);
-  gap:12px;
+  gap:16px;
 }
-@media(max-width:900px){
-  .grid-2{ grid-template-columns:1fr; }
-}
+@media(max-width:1000px){ .grid-2{ grid-template-columns:1fr; } }
 
+/* Tabla rápida de baños */
 #tbl_bano{
   display:grid;
   grid-template-columns:1fr auto;
-  gap:8px;
+  gap:10px;
   margin-top:8px;
 }
 #tbl_bano > div{
-  padding:8px;
+  padding:10px 12px;
   background:#fff;
-  border-radius:8px;
+  border-radius:12px;
   border:1px solid #e6eaf0;
 }
 
-
-/* Fija la altura de los canvas dentro de tarjetas */
+/* Canvas dentro de tarjetas – alturas fijas para evitar scroll infinito */
 .card canvas{
   width:100% !important;
   max-width:100%;
-  height:240px !important;   /* altura estándar */
+  height:240px !important;
   display:block;
 }
+#chartDia   { height:200px !important; }
+#chartCat   { height:230px !important; }
+#chartBanos { height:230px !important; }
+#chartZona  { height:200px !important; }
 
-/* Ajustes finos por gráfico (si quieres diferentes alturas) */
-#chartDia   { height:180px !important; }
-#chartCat   { height:220px !important; }
-#chartBanos { height:220px !important; }
-#chartZona  { height:180px !important; }
-
-/* Evita desbordes visuales */
+/* Evita desbordes */
 .card{ overflow:hidden; }
 
-.table-wrap{ width:100%; overflow:auto; }
-.tbl{ width:100%; border-collapse:separate; border-spacing:0; min-width:720px; }
-.tbl thead th{
-  text-align:left; padding:12px; background:#0f1a2a; color:#dbe4f0;
-  position:sticky; top:0; z-index:1; border-bottom:1px solid #203047; 
-  border-top-left-radius:8px;
-}
-.tbl thead th:last-child{ border-top-right-radius:8px; }
-.tbl tbody td{
-  padding:12px; border-bottom:1px solid #e6eaf0; background:#fff;
-}
-.tbl tbody tr:nth-child(odd) td{ background:#f9fbff; }
-.tbl tbody tr:hover td{ background:#eef6ff; }
+/* Tabla historial: ya heredamos estilos base desde brand.css */
