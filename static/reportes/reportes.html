@@ -6,12 +6,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Reportes – Baños</title>
 
-  <!-- RUTAS ABSOLUTAS -->
   <link rel="stylesheet" href="/static/css/brand.css">
   <link rel="stylesheet" href="/static/reportes/assets/css/reportes.css">
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- ES módulo para que funcione el import './utils.js' -->
   <script type="module" defer src="/static/reportes/assets/js/reportes.js"></script>
 </head>
 
@@ -32,8 +30,19 @@
             <option value="">Todos</option>
           </select>
         </label>
-        <button id="refrescar" class="btn small">Actualizar</button>
+        <button id="refrescar" class="btn small" type="button">Actualizar</button>
+        <button id="limpiar" class="btn small" type="button" title="Borrar filtros guardados">Limpiar filtros</button>
+
+        <!-- Auto-refresh -->
+        <label style="display:flex;align-items:center;gap:6px;margin-left:8px;">
+          <input id="auto_toggle" type="checkbox" />
+          Auto cada
+        </label>
+        <input id="auto_interval" type="number" min="5" max="300" value="10"
+               class="input" style="width:84px;padding:8px 10px;">
+        <span class="muted">s</span>
       </div>
+      <div id="filters_hint" class="muted" style="margin-top:6px;"></div>
     </header>
 
     <section class="kpis">

@@ -6,8 +6,8 @@
   --accent-700:#0A8CAB;    /* hover de CTA */
   --bg:#0b1f33;            /* fallback si no carga imagen */
   --card:rgba(255,255,255,0.88); /* tarjetas vidrio */
-  --text:#0f253d;          /* texto en tarjetas */
-  --muted:#4b6278;         /* texto secundario */
+  --text:#201212;          /* texto en tarjetas */
+  --muted:#323a41;         /* texto secundario */
   --border:rgba(255,255,255,0.35);
   --shadow:0 10px 30px rgba(2,16,28,.22);
 }
