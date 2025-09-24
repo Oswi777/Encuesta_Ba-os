@@ -5,3 +5,5 @@ qrcode==7.4.2
 pillow==10.4.0
 python-dotenv==1.0.1
 tzdata==2025.1
+SQLAlchemy==2.0.31
+psycopg2-binary==2.9.9

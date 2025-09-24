@@ -1,26 +1,26 @@
-import os, sqlite3, pathlib
+# seed.py
+from models import init_db, SessionLocal, Bano
 
-db_path = os.environ.get("DATABASE_PATH", "banos.db")
-schema_path = os.environ.get("SCHEMA_PATH", "schema.sql")
-
-banos = [
-  ("B-A1-H1","Baño Hombres Ala 1 - Piso 1","Ala 1","1","Hombres",1),
-  ("B-A1-M1","Baño Mujeres Ala 1 - Piso 1","Ala 1","1","Mujeres",1),
-  ("B-A2-H2","Baño Hombres Ala 2 - Piso 2","Ala 2","2","Hombres",1),
+BANOS = [
+  Bano(id="B-A1-H1", nombre="Baño Hombres Ala 1 - Piso 1", zona="Ala 1", piso="1", sexo="Hombres", activo=True),
+  Bano(id="B-A1-M1", nombre="Baño Mujeres Ala 1 - Piso 1", zona="Ala 1", piso="1", sexo="Mujeres", activo=True),
+  Bano(id="B-A2-H2", nombre="Baño Hombres Ala 2 - Piso 2", zona="Ala 2", piso="2", sexo="Hombres", activo=True),
 ]
 
-con = sqlite3.connect(db_path); cur = con.cursor()
-cur.executescript(pathlib.Path(schema_path).read_text(encoding="utf-8"))
+def main():
+    init_db()
+    db = SessionLocal()
+    try:
+        for b in BANOS:
+            cur = db.get(Bano, b.id)
+            if cur:
+                cur.nombre, cur.zona, cur.piso, cur.sexo, cur.activo = b.nombre, b.zona, b.piso, b.sexo, b.activo
+            else:
+                db.add(b)
+        db.commit()
+        print("OK seed")
+    finally:
+        db.close()
 
-# UPSERT simple
-for row in banos:
-    cur.execute(
-        "INSERT INTO banos(id,nombre,zona,piso,sexo,activo) VALUES(?,?,?,?,?,?) "
-        "ON CONFLICT(id) DO UPDATE SET "
-        "nombre=excluded.nombre, zona=excluded.zona, piso=excluded.piso, "
-        "sexo=excluded.sexo, activo=excluded.activo",
-        row
-    )
-
-con.commit(); con.close()
-print("OK seed →", db_path)
+if __name__ == "__main__":
+    main()
