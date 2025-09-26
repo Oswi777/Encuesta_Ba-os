@@ -15,6 +15,3 @@ services:
       - key: UPLOAD_FOLDER
         value: uploads
 
-databases:
-  - name: encuesta-banos-db
-    plan: free
