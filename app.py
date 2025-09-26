@@ -1,19 +1,35 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, url_for
 from werkzeug.utils import secure_filename
-import os, datetime
+import os, sqlite3, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
-
-from models import SessionLocal, init_db, Bano, Reporte
-from sqlalchemy import select, func, desc
+from zoneinfo import ZoneInfo  # Python 3.9+
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
+    app.config["DATABASE_PATH"] = os.getenv("DATABASE_PATH", "banos.db")
     app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER", "uploads")
-    app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # 3 MB
+    app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # 3 MB para uploads
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
+    def db():
+        conn = sqlite3.connect(
+            app.config["DATABASE_PATH"],
+            check_same_thread=False,
+            detect_types=sqlite3.PARSE_DECLTYPES
+        )
+        conn.row_factory = sqlite3.Row
+        # Robustece SQLite (concurrencia moderada)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            pass
+        return conn
+
+    # ---- Helpers de fecha / Zona Horaria ----
     DEFAULT_TZ = os.getenv("DEFAULT_TZ", "America/Mexico_City")
+
     def get_tz_from_request():
         tz_str = (request.args.get("tz") or DEFAULT_TZ).strip()
         try:
@@ -21,11 +37,52 @@ def create_app():
         except Exception:
             return ZoneInfo(DEFAULT_TZ)
 
-    # Crea tablas si no existen (dev/test). En prod usarás siempre Postgres ya listo.
+    def parse_sqlite_ts_utc(ts: str) -> datetime.datetime:
+        """
+        Acepta 'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD HH:MM:SS.%f' en UTC (SQLite CURRENT_TIMESTAMP).
+        Devuelve datetime con tzinfo=UTC.
+        """
+        ts = (ts or "").strip().replace("Z", "")  # tolera posible 'Z'
+        try:
+            dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
+        except ValueError:
+            dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        return dt.replace(tzinfo=datetime.timezone.utc)
+
+    def local_bounds_to_utc(desde: str | None, hasta: str | None, tzinfo: ZoneInfo) -> tuple[str, str]:
+        """
+        Convierte días locales [desde..hasta] a límites UTC inclusivos.
+        Retorna strings 'YYYY-MM-DD HH:MM:SS' en UTC.
+        """
+        # Defaults amplios si falta alguno
+        if desde:
+            d0 = datetime.date.fromisoformat(desde)
+        else:
+            d0 = datetime.date(1970, 1, 1)
+
+        if hasta:
+            d1 = datetime.date.fromisoformat(hasta)
+        else:
+            d1 = datetime.date(2100, 1, 1)
+
+        start_local = datetime.datetime(d0.year, d0.month, d0.day, 0, 0, 0, tzinfo=tzinfo)
+        end_local   = datetime.datetime(d1.year, d1.month, d1.day, 23, 59, 59, 999000, tzinfo=tzinfo)
+
+        start_utc = start_local.astimezone(datetime.timezone.utc)
+        end_utc   = end_local.astimezone(datetime.timezone.utc)
+
+        def fmt(dt: datetime.datetime) -> str:
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        return fmt(start_utc), fmt(end_utc)
+
+    # ---- Init schema idempotente al arrancar ----
     try:
-        init_db()
+        con = db(); cur = con.cursor()
+        cur.executescript(Path("schema.sql").read_text(encoding="utf-8"))
+        con.commit(); con.close()
     except Exception as e:
-        app.logger.warning(f"DB init warning: {e}")
+        app.logger.warning(f"Schema init warning: {e}")
 
     @app.route("/")
     def index():
@@ -35,14 +92,12 @@ def create_app():
     @app.route("/qr", methods=["GET"])
     def qr_form():
         id_bano = (request.args.get("r") or "").strip()
-        db = SessionLocal()
-        try:
-            b = db.get(Bano, id_bano)
-            if not b or not b.activo:
-                return render_template("not_found.html"), 404
-            return render_template("qr_form.html", bano={"id": b.id, "nombre": b.nombre, "zona": b.zona, "piso": b.piso, "sexo": b.sexo})
-        finally:
-            db.close()
+        con = db(); cur = con.cursor()
+        cur.execute("SELECT * FROM banos WHERE id=? AND activo=1", (id_bano,))
+        bano = cur.fetchone()
+        if not bano:
+            return render_template("not_found.html"), 404
+        return render_template("qr_form.html", bano=bano)
 
     # ---------- API: crear reporte ----------
     @app.route("/api/reportes", methods=["POST"])
@@ -59,6 +114,7 @@ def create_app():
         foto_url = None
         if "foto" in request.files and request.files["foto"].filename:
             f = request.files["foto"]
+            # valida extensión si habilitas fotos
             allowed = {"png", "jpg", "jpeg", "webp"}
             ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
             if ext not in allowed:
@@ -69,20 +125,20 @@ def create_app():
             f.save(fpath)
             foto_url = f"/uploads/{fname}"
 
-        db = SessionLocal()
-        try:
-            b = db.get(Bano, id_bano)
-            if not b or not b.activo:
-                return jsonify({"ok": False, "error": "Baño inválido"}), 400
+        con = db(); cur = con.cursor()
+        # validar baño
+        cur.execute("SELECT 1 FROM banos WHERE id=? AND activo=1", (id_bano,))
+        if not cur.fetchone():
+            return jsonify({"ok": False, "error": "Baño inválido"}), 400
 
-            r = Reporte(
-                id_bano=id_bano, categoria=categoria, comentario=comentario,
-                foto_url=foto_url, creado_por_ip=request.remote_addr, origen="qr"
-            )
-            db.add(r); db.commit()
-            return jsonify({"ok": True, "reporte_id": r.id})
-        finally:
-            db.close()
+        cur.execute(
+            """INSERT INTO reportes(id_bano, categoria, comentario, foto_url, creado_por_ip)
+               VALUES(?,?,?,?,?)""",
+            (id_bano, categoria, comentario, foto_url, request.remote_addr)
+        )
+        con.commit()
+        rep_id = cur.lastrowid
+        return jsonify({"ok": True, "reporte_id": rep_id})
 
     @app.route("/uploads/<path:fname>")
     def uploads(fname):
@@ -91,15 +147,9 @@ def create_app():
     # ---------- API: catálogo de baños ----------
     @app.route("/api/banos")
     def api_banos():
-        db = SessionLocal()
-        try:
-            stmt = select(Bano).where(Bano.activo == True).order_by(Bano.zona, Bano.piso, Bano.nombre)
-            rows = db.execute(stmt).scalars().all()
-            return jsonify([{
-                "id": x.id, "nombre": x.nombre, "zona": x.zona, "piso": x.piso, "sexo": x.sexo, "activo": x.activo
-            } for x in rows])
-        finally:
-            db.close()
+        con = db(); cur = con.cursor()
+        cur.execute("SELECT * FROM banos WHERE activo=1 ORDER BY zona, piso, nombre")
+        return jsonify([dict(x) for x in cur.fetchall()])
 
     # ---------- API: lista paginada de reportes ----------
     @app.route("/api/reportes_list")
@@ -111,51 +161,58 @@ def create_app():
         search = (request.args.get("q") or "").strip()
 
         tzinfo = get_tz_from_request()
+
         page = int(request.args.get("page", 1))
         per_page = max(5, min(50, int(request.args.get("per_page", 10))))
         offset = (page - 1) * per_page
 
-        db = SessionLocal()
-        try:
-            q = db.query(Reporte, Bano).join(Bano, Bano.id == Reporte.id_bano)
-            if desde: q = q.filter(func.date(Reporte.creado_en) >= desde)
-            if hasta: q = q.filter(func.date(Reporte.creado_en) <= hasta)
-            if zona:  q = q.filter(Bano.zona == zona)
-            if id_b:  q = q.filter(Reporte.id_bano == id_b)
-            if search:
-                like = f"%{search}%"
-                q = q.filter(
-                    (Reporte.categoria.ilike(like)) | (Reporte.comentario.ilike(like)) |
-                    (Bano.nombre.ilike(like)) | (Bano.id.ilike(like)) |
-                    (Bano.zona.ilike(like)) | (Bano.piso.ilike(like))
-                )
+        con = db(); cur = con.cursor()
+        base = " FROM reportes r JOIN banos b ON b.id = r.id_bano WHERE 1=1 "
+        wh, params = "", []
 
-            total = q.count()
-            pages = max(1, (total + per_page - 1) // per_page)
+        # --- FILTRO por rango UTC derivado de fechas locales ---
+        if desde or hasta:
+            ini_utc, fin_utc = local_bounds_to_utc(desde, hasta, tzinfo)
+            wh += " AND r.creado_en >= ? AND r.creado_en <= ?"
+            params += [ini_utc, fin_utc]
 
-            items = []
-            for rep, b in q.order_by(desc(Reporte.creado_en)).limit(per_page).offset(offset).all():
-                try:
-                    creado_local = rep.creado_en.astimezone(tzinfo).isoformat()
-                except Exception:
-                    creado_local = rep.creado_en.isoformat() if rep.creado_en else None
-                items.append({
-                    "id": rep.id,
-                    "creado_en": rep.creado_en.isoformat() if rep.creado_en else None,
-                    "creado_local": creado_local,
-                    "categoria": rep.categoria,
-                    "comentario": rep.comentario,
-                    "foto_url": rep.foto_url,
-                    "id_bano": b.id,
-                    "nombre_bano": b.nombre,
-                    "zona": b.zona,
-                    "piso": b.piso,
-                    "sexo": b.sexo
-                })
+        if zona:
+            wh += " AND b.zona = ?"; params.append(zona)
+        if id_b:
+            wh += " AND r.id_bano = ?"; params.append(id_b)
+        if search:
+            like = f"%{search}%"
+            wh += (" AND (r.categoria LIKE ? OR r.comentario LIKE ? OR "
+                   "b.nombre LIKE ? OR b.id LIKE ? OR b.zona LIKE ? OR b.piso LIKE ?)")
+            params += [like, like, like, like, like, like]
 
-            return jsonify({"page": page, "per_page": per_page, "total": total, "pages": pages, "items": items})
-        finally:
-            db.close()
+        # total
+        cur.execute("SELECT COUNT(*) " + base + wh, params)
+        total = cur.fetchone()[0]
+        pages = max(1, (total + per_page - 1) // per_page)
+
+        # datos (más recientes primero)
+        cur.execute(
+            "SELECT r.id, r.creado_en, r.categoria, r.comentario, r.foto_url, "
+            "b.id AS id_bano, b.nombre AS nombre_bano, b.zona, b.piso, b.sexo "
+            + base + wh + " ORDER BY r.creado_en DESC LIMIT ? OFFSET ?",
+            params + [per_page, offset]
+        )
+
+        items = []
+        for row in cur.fetchall():
+            it = dict(row)
+            try:
+                dt_utc = parse_sqlite_ts_utc(it["creado_en"])
+                it["creado_local"] = dt_utc.astimezone(tzinfo).isoformat()
+            except Exception:
+                it["creado_local"] = it["creado_en"]
+            items.append(it)
+
+        return jsonify({
+            "page": page, "per_page": per_page, "total": total, "pages": pages,
+            "items": items
+        })
 
     # ---------- API: KPIs ----------
     @app.route("/api/kpis")
@@ -166,56 +223,66 @@ def create_app():
         id_b  = request.args.get("id_bano")
         tzinfo = get_tz_from_request()
 
-        db = SessionLocal()
-        try:
-            q = db.query(Reporte.categoria, Reporte.creado_en, Reporte.id_bano, Bano.zona).join(Bano, Bano.id == Reporte.id_bano)
-            if desde: q = q.filter(func.date(Reporte.creado_en) >= desde)
-            if hasta: q = q.filter(func.date(Reporte.creado_en) <= hasta)
-            if zona:  q = q.filter(Bano.zona == zona)
-            if id_b:  q = q.filter(Reporte.id_bano == id_b)
-            rows = q.all()
+        con = db(); cur = con.cursor()
+        q = ("SELECT r.categoria, r.creado_en, r.id_bano, b.zona "
+             "FROM reportes r JOIN banos b ON b.id = r.id_bano WHERE 1=1")
+        params = []
 
-            total = len(rows)
+        # --- FILTRO por rango UTC derivado de fechas locales ---
+        if desde or hasta:
+            ini_utc, fin_utc = local_bounds_to_utc(desde, hasta, tzinfo)
+            q += " AND r.creado_en >= ? AND r.creado_en <= ?"
+            params += [ini_utc, fin_utc]
 
-            # catálogo de baños activos
-            cat_banos = {b.id: {"id": b.id, "nombre": b.nombre, "zona": b.zona, "piso": b.piso}
-                         for b in db.query(Bano).filter(Bano.activo == True).all()}
+        if zona:
+            q += " AND b.zona = ?"; params.append(zona)
+        if id_b:
+            q += " AND r.id_bano = ?"; params.append(id_b)
 
-            por_categoria, por_bano, por_dia, por_zona = {}, {}, {}, {}
-            for categoria, creado_en, id_bano, z in rows:
-                por_categoria[categoria] = por_categoria.get(categoria, 0) + 1
-                por_bano[id_bano] = por_bano.get(id_bano, 0) + 1
-                por_zona[z] = por_zona.get(z, 0) + 1
-                try:
-                    dloc = creado_en.astimezone(tzinfo).date().isoformat()
-                except Exception:
-                    dloc = creado_en.date().isoformat()
-                por_dia[dloc] = por_dia.get(dloc, 0) + 1
+        cur.execute(q, params)
+        rows = cur.fetchall()
 
-            top_banos = sorted(
-                [{"id_bano": k, "nombre": cat_banos.get(k, {}).get("nombre", k), "total": v}
-                 for k, v in por_bano.items()],
-                key=lambda x: x["total"], reverse=True
-            )[:10]
+        total = len(rows)
 
-            return jsonify({
-                "total_reportes": total,
-                "por_categoria": por_categoria,
-                "por_bano": por_bano,
-                "por_dia": por_dia,
-                "por_zona": por_zona,
-                "top_banos": top_banos,
-                "banos_catalogo": cat_banos
-            })
-        finally:
-            db.close()
+        cur.execute("SELECT id, nombre, zona, piso FROM banos WHERE activo=1")
+        banos_map = {r["id"]: dict(r) for r in cur.fetchall()}
+
+        por_categoria, por_bano, por_dia, por_zona = {}, {}, {}, {}
+        for r in rows:
+            por_categoria[r["categoria"]] = por_categoria.get(r["categoria"], 0) + 1
+            por_bano[r["id_bano"]] = por_bano.get(r["id_bano"], 0) + 1
+            por_zona[r["zona"]] = por_zona.get(r["zona"], 0) + 1
+
+            # agrupa por DÍA LOCAL
+            try:
+                dt_utc = parse_sqlite_ts_utc(r["creado_en"])
+                dloc = dt_utc.astimezone(tzinfo).date().isoformat()
+            except Exception:
+                dloc = r["creado_en"].split(" ")[0]
+            por_dia[dloc] = por_dia.get(dloc, 0) + 1
+
+        top_banos = sorted(
+            [{"id_bano": k, "nombre": banos_map.get(k, {}).get("nombre", k), "total": v}
+             for k, v in por_bano.items()],
+            key=lambda x: x["total"], reverse=True
+        )[:10]
+
+        return jsonify({
+            "total_reportes": total,
+            "por_categoria": por_categoria,
+            "por_bano": por_bano,
+            "por_dia": por_dia,
+            "por_zona": por_zona,
+            "top_banos": top_banos,
+            "banos_catalogo": banos_map
+        })
 
     # --- Encuesta/kiosco sin QR ---
     @app.route("/encuesta")
     def encuesta_page():
         return render_template("encuesta.html")
 
-    # ---------- Reportes (HTML estático) ----------
+    # ---------- Reportes (sirve el HTML estático) ----------
     @app.route("/reportes")
     def reportes_page():
         return app.send_static_file("reportes/reportes.html")
@@ -223,9 +290,7 @@ def create_app():
     @app.route("/api/health")
     def health():
         try:
-            db = SessionLocal()
-            db.execute(select(func.now()))
-            db.close()
+            con = db(); con.execute("SELECT 1"); con.close()
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "err": str(e)}, 500
