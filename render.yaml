@@ -1,17 +1,19 @@
 services:
   - type: web
-    name: encuesta-banos
+    name: banos-web
     env: python
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn -w 2 -b 0.0.0.0:8000 wsgi:application"
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k gthread -t 120 -b 0.0.0.0:$PORT wsgi:application
+    autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: encuesta-banos-db
-          property: connectionString
+        sync: false   # la configuras manualmente en el dashboard de Render (puede ser SQLite local o Postgres externo)
+      - key: PYTHON_VERSION
+        value: 3.12.3
       - key: DEFAULT_TZ
         value: America/Monterrey
       - key: UPLOAD_FOLDER
         value: uploads
-
+      - key: APP_VERSION
+        value: "1.0.0-banos"
