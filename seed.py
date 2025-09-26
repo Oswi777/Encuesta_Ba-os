@@ -1,26 +1,25 @@
-# seed.py
-from models import init_db, SessionLocal, Bano
+import os
+import sqlite3
+import pathlib
 
-BANOS = [
-  Bano(id="B-A1-H1", nombre="Baño Hombres Ala 1 - Piso 1", zona="Ala 1", piso="1", sexo="Hombres", activo=True),
-  Bano(id="B-A1-M1", nombre="Baño Mujeres Ala 1 - Piso 1", zona="Ala 1", piso="1", sexo="Mujeres", activo=True),
-  Bano(id="B-A2-H2", nombre="Baño Hombres Ala 2 - Piso 2", zona="Ala 2", piso="2", sexo="Hombres", activo=True),
+# Lee ruta de BD desde env (coincide con Render: /data/banos.db)
+db_path = os.getenv("DATABASE_PATH", "banos.db")
+schema_path = "schema.sql"
+
+# Asegura carpeta contenedora (por si es /data/...)
+pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+banos = [
+  ("B-A1-H1","Baño Hombres Ala 1 - Piso 1","Ala 1","1","Hombres",1),
+  ("B-A1-M1","Baño Mujeres Ala 1 - Piso 1","Ala 1","1","Mujeres",1),
+  ("B-A2-H2","Baño Hombres Ala 2 - Piso 2","Ala 2","2","Hombres",1),
 ]
 
-def main():
-    init_db()
-    db = SessionLocal()
-    try:
-        for b in BANOS:
-            cur = db.get(Bano, b.id)
-            if cur:
-                cur.nombre, cur.zona, cur.piso, cur.sexo, cur.activo = b.nombre, b.zona, b.piso, b.sexo, b.activo
-            else:
-                db.add(b)
-        db.commit()
-        print("OK seed")
-    finally:
-        db.close()
-
-if __name__ == "__main__":
-    main()
+con = sqlite3.connect(db_path); cur = con.cursor()
+cur.executescript(pathlib.Path(schema_path).read_text(encoding="utf-8"))
+cur.executemany(
+    "INSERT OR REPLACE INTO banos(id,nombre,zona,piso,sexo,activo) VALUES(?,?,?,?,?,?)",
+    banos
+)
+con.commit(); con.close()
+print("OK seed →", db_path)
