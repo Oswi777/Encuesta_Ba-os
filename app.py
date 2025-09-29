@@ -1,88 +1,89 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, url_for
 from werkzeug.utils import secure_filename
-import os, sqlite3, datetime
+import os, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo  # Python 3.9+
 
+# Importa helpers ORM (tu models.py actual ya está OK)
+from models import (
+    SessionLocal, init_db,
+    get_banos, create_reporte, list_reportes, fetch_rows_for_kpis,
+    Bano
+)
+
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
-    app.config["DATABASE_PATH"] = os.getenv("DATABASE_PATH", "banos.db")
+
+    # --- Config básica ---
     app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER", "uploads")
     app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # 3 MB para uploads
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
-    def db():
-        conn = sqlite3.connect(
-            app.config["DATABASE_PATH"],
-            check_same_thread=False,
-            detect_types=sqlite3.PARSE_DECLTYPES
-        )
-        conn.row_factory = sqlite3.Row
-        # Robustece SQLite (concurrencia moderada)
-        try:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA busy_timeout=5000;")
-            conn.execute("PRAGMA synchronous=NORMAL;")
-        except Exception:
-            pass
-        return conn
-
     # ---- Helpers de fecha / Zona Horaria ----
-    DEFAULT_TZ = os.getenv("DEFAULT_TZ", "America/Mexico_City")
+    DEFAULT_TZ = os.getenv("DEFAULT_TZ", "America/Monterrey")
 
     def get_tz_from_request():
-        tz_str = (request.args.get("tz") or DEFAULT_TZ).strip()
+        """
+        Devuelve un tzinfo válido y robusto.
+        Intenta: tz de query -> DEFAULT_TZ -> aliases MX -> UTC -> offset -6.
+        """
+        preferidas = [
+            (request.args.get("tz") or DEFAULT_TZ).strip(),
+            "America/Matamoros",
+            "America/Mexico_City",
+        ]
+        for key in preferidas:
+            try:
+                return ZoneInfo(key)
+            except Exception:
+                continue
         try:
-            return ZoneInfo(tz_str)
+            return ZoneInfo("UTC")
         except Exception:
-            return ZoneInfo(DEFAULT_TZ)
+            return datetime.timezone(datetime.timedelta(hours=-6))
 
-    def parse_sqlite_ts_utc(ts: str) -> datetime.datetime:
+    # ---- Init schema + semilla (idempotente) ----
+    def ensure_seed():
         """
-        Acepta 'YYYY-MM-DD HH:MM:SS' o 'YYYY-MM-DD HH:MM:SS.%f' en UTC (SQLite CURRENT_TIMESTAMP).
-        Devuelve datetime con tzinfo=UTC.
+        Crea tablas si no existen (init_db) y agrega la semilla de baños
+        SOLO si la tabla 'banos' está vacía. Funciona con Postgres/SQLite.
         """
-        ts = (ts or "").strip().replace("Z", "")  # tolera posible 'Z'
-        try:
-            dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
-        except ValueError:
-            dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-        return dt.replace(tzinfo=datetime.timezone.utc)
+        init_db()
+        seed_banos = [
+            # RH
+            ("RH-PB-H", "Baños RH – Planta Baja Hombres", "RH", "PB", "Hombres", True),
+            ("RH-PB-M", "Baños RH – Planta Baja Mujeres", "RH", "PB", "Mujeres", True),
+            ("RH-PA-H", "Baños RH – Planta Alta Hombres", "RH", "PA", "Hombres", True),
+            ("RH-PA-M", "Baños RH – Planta Alta Mujeres", "RH", "PA", "Mujeres", True),
+            # Planta 1
+            ("P1-ADM-H",  "Baños Planta 1 – Administrativos Hombres", "Planta 1", "1", "Hombres", True),
+            ("P1-ADM-M",  "Baños Planta 1 – Administrativos Mujeres", "Planta 1", "1", "Mujeres", True),
+            ("P1-PROD-H", "Baños Planta 1 – Producción Hombres",     "Planta 1", "1", "Hombres", True),
+            ("P1-PROD-M", "Baños Planta 1 – Producción Mujeres",     "Planta 1", "1", "Mujeres", True),
+            # Planta 2
+            ("P2-H", "Baños Planta 2 Hombres", "Planta 2", "2", "Hombres", True),
+            ("P2-M", "Baños Planta 2 Mujeres", "Planta 2", "2", "Mujeres", True),
+            # Planta 3
+            ("P3-H", "Baños Planta 3 Hombres", "Planta 3", "3", "Hombres", True),
+            ("P3-M", "Baños Planta 3 Mujeres", "Planta 3", "3", "Mujeres", True),
+        ]
+        with SessionLocal() as s:
+            have_any = s.query(Bano).count() > 0
+            if not have_any:
+                for id_, nombre, zona, piso, sexo, activo in seed_banos:
+                    s.add(Bano(id=id_, nombre=nombre, zona=zona, piso=piso, sexo=sexo, activo=bool(activo)))
+                s.commit()
+                print(f"[seed] Insertados {len(seed_banos)} baños.")
+            else:
+                print("[seed] Ya existen baños; no se inserta.")
 
-    def local_bounds_to_utc(desde: str | None, hasta: str | None, tzinfo: ZoneInfo) -> tuple[str, str]:
-        """
-        Convierte días locales [desde..hasta] a límites UTC inclusivos.
-        Retorna strings 'YYYY-MM-DD HH:MM:SS' en UTC.
-        """
-        # Defaults amplios si falta alguno
-        if desde:
-            d0 = datetime.date.fromisoformat(desde)
-        else:
-            d0 = datetime.date(1970, 1, 1)
-
-        if hasta:
-            d1 = datetime.date.fromisoformat(hasta)
-        else:
-            d1 = datetime.date(2100, 1, 1)
-
-        start_local = datetime.datetime(d0.year, d0.month, d0.day, 0, 0, 0, tzinfo=tzinfo)
-        end_local   = datetime.datetime(d1.year, d1.month, d1.day, 23, 59, 59, 999000, tzinfo=tzinfo)
-
-        start_utc = start_local.astimezone(datetime.timezone.utc)
-        end_utc   = end_local.astimezone(datetime.timezone.utc)
-
-        def fmt(dt: datetime.datetime) -> str:
-            return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        return fmt(start_utc), fmt(end_utc)
-
-    # ---- Init schema idempotente al arrancar ----
+    # Ejecuta init+seed al arrancar el proceso
     try:
-        con = db(); cur = con.cursor()
-        cur.executescript(Path("schema.sql").read_text(encoding="utf-8"))
-        con.commit(); con.close()
+        ensure_seed()
     except Exception as e:
-        app.logger.warning(f"Schema init warning: {e}")
+        # No bloquea el arranque si falla la seed por permisos/conexión,
+        # pero deja huella en logs para diagnosticar.
+        app.logger.warning(f"Seed/init warning: {e}")
 
     @app.route("/")
     def index():
@@ -92,9 +93,9 @@ def create_app():
     @app.route("/qr", methods=["GET"])
     def qr_form():
         id_bano = (request.args.get("r") or "").strip()
-        con = db(); cur = con.cursor()
-        cur.execute("SELECT * FROM banos WHERE id=? AND activo=1", (id_bano,))
-        bano = cur.fetchone()
+        with SessionLocal() as s:
+            mapa = {b["id"]: b for b in get_banos(s, solo_activos=True)}
+        bano = mapa.get(id_bano)
         if not bano:
             return render_template("not_found.html"), 404
         return render_template("qr_form.html", bano=bano)
@@ -114,7 +115,6 @@ def create_app():
         foto_url = None
         if "foto" in request.files and request.files["foto"].filename:
             f = request.files["foto"]
-            # valida extensión si habilitas fotos
             allowed = {"png", "jpg", "jpeg", "webp"}
             ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
             if ext not in allowed:
@@ -125,20 +125,22 @@ def create_app():
             f.save(fpath)
             foto_url = f"/uploads/{fname}"
 
-        con = db(); cur = con.cursor()
-        # validar baño
-        cur.execute("SELECT 1 FROM banos WHERE id=? AND activo=1", (id_bano,))
-        if not cur.fetchone():
-            return jsonify({"ok": False, "error": "Baño inválido"}), 400
-
-        cur.execute(
-            """INSERT INTO reportes(id_bano, categoria, comentario, foto_url, creado_por_ip)
-               VALUES(?,?,?,?,?)""",
-            (id_bano, categoria, comentario, foto_url, request.remote_addr)
-        )
-        con.commit()
-        rep_id = cur.lastrowid
-        return jsonify({"ok": True, "reporte_id": rep_id})
+        try:
+            with SessionLocal() as s:
+                rep_id = create_reporte(
+                    s,
+                    id_bano=id_bano,
+                    categoria=categoria,
+                    comentario=comentario or None,
+                    foto_url=foto_url,
+                    origen="qr",
+                    creado_por_ip=request.remote_addr,
+                )
+            return jsonify({"ok": True, "reporte_id": rep_id})
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        except Exception:
+            return jsonify({"ok": False, "error": "Error al guardar"}), 500
 
     @app.route("/uploads/<path:fname>")
     def uploads(fname):
@@ -147,9 +149,8 @@ def create_app():
     # ---------- API: catálogo de baños ----------
     @app.route("/api/banos")
     def api_banos():
-        con = db(); cur = con.cursor()
-        cur.execute("SELECT * FROM banos WHERE activo=1 ORDER BY zona, piso, nombre")
-        return jsonify([dict(x) for x in cur.fetchall()])
+        with SessionLocal() as s:
+            return jsonify(get_banos(s, solo_activos=True))
 
     # ---------- API: lista paginada de reportes ----------
     @app.route("/api/reportes_list")
@@ -164,55 +165,38 @@ def create_app():
 
         page = int(request.args.get("page", 1))
         per_page = max(5, min(50, int(request.args.get("per_page", 10))))
-        offset = (page - 1) * per_page
 
-        con = db(); cur = con.cursor()
-        base = " FROM reportes r JOIN banos b ON b.id = r.id_bano WHERE 1=1 "
-        wh, params = "", []
+        with SessionLocal() as s:
+            data = list_reportes(
+                s,
+                desde=desde,
+                hasta=hasta,
+                zona=zona,
+                id_bano=id_b,
+                search=search,
+                page=page,
+                per_page=per_page,
+            )
 
-        # --- FILTRO por rango UTC derivado de fechas locales ---
-        if desde or hasta:
-            ini_utc, fin_utc = local_bounds_to_utc(desde, hasta, tzinfo)
-            wh += " AND r.creado_en >= ? AND r.creado_en <= ?"
-            params += [ini_utc, fin_utc]
-
-        if zona:
-            wh += " AND b.zona = ?"; params.append(zona)
-        if id_b:
-            wh += " AND r.id_bano = ?"; params.append(id_b)
-        if search:
-            like = f"%{search}%"
-            wh += (" AND (r.categoria LIKE ? OR r.comentario LIKE ? OR "
-                   "b.nombre LIKE ? OR b.id LIKE ? OR b.zona LIKE ? OR b.piso LIKE ?)")
-            params += [like, like, like, like, like, like]
-
-        # total
-        cur.execute("SELECT COUNT(*) " + base + wh, params)
-        total = cur.fetchone()[0]
-        pages = max(1, (total + per_page - 1) // per_page)
-
-        # datos (más recientes primero)
-        cur.execute(
-            "SELECT r.id, r.creado_en, r.categoria, r.comentario, r.foto_url, "
-            "b.id AS id_bano, b.nombre AS nombre_bano, b.zona, b.piso, b.sexo "
-            + base + wh + " ORDER BY r.creado_en DESC LIMIT ? OFFSET ?",
-            params + [per_page, offset]
-        )
-
-        items = []
-        for row in cur.fetchall():
-            it = dict(row)
+        # añade creado_local a cada item
+        items2 = []
+        for it in data["items"]:
             try:
-                dt_utc = parse_sqlite_ts_utc(it["creado_en"])
-                it["creado_local"] = dt_utc.astimezone(tzinfo).isoformat()
+                raw = it.get("creado_en")
+                if isinstance(raw, str):
+                    # ISO con Z o con offset
+                    dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                else:
+                    dt = raw
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                it["creado_local"] = dt.astimezone(tzinfo).isoformat()
             except Exception:
-                it["creado_local"] = it["creado_en"]
-            items.append(it)
+                it["creado_local"] = it.get("creado_en")
+            items2.append(it)
+        data["items"] = items2
 
-        return jsonify({
-            "page": page, "per_page": per_page, "total": total, "pages": pages,
-            "items": items
-        })
+        return jsonify(data)
 
     # ---------- API: KPIs ----------
     @app.route("/api/kpis")
@@ -223,59 +207,54 @@ def create_app():
         id_b  = request.args.get("id_bano")
         tzinfo = get_tz_from_request()
 
-        con = db(); cur = con.cursor()
-        q = ("SELECT r.categoria, r.creado_en, r.id_bano, b.zona "
-             "FROM reportes r JOIN banos b ON b.id = r.id_bano WHERE 1=1")
-        params = []
-
-        # --- FILTRO por rango UTC derivado de fechas locales ---
-        if desde or hasta:
-            ini_utc, fin_utc = local_bounds_to_utc(desde, hasta, tzinfo)
-            q += " AND r.creado_en >= ? AND r.creado_en <= ?"
-            params += [ini_utc, fin_utc]
-
-        if zona:
-            q += " AND b.zona = ?"; params.append(zona)
-        if id_b:
-            q += " AND r.id_bano = ?"; params.append(id_b)
-
-        cur.execute(q, params)
-        rows = cur.fetchall()
-
-        total = len(rows)
-
-        cur.execute("SELECT id, nombre, zona, piso FROM banos WHERE activo=1")
-        banos_map = {r["id"]: dict(r) for r in cur.fetchall()}
+        with SessionLocal() as s:
+            rows = fetch_rows_for_kpis(
+                s, desde=desde, hasta=hasta, zona=zona, id_bano=id_b
+            )
+            banos_catalogo = {b["id"]: b for b in get_banos(s, solo_activos=True)}
 
         por_categoria, por_bano, por_dia, por_zona = {}, {}, {}, {}
-        for r in rows:
-            por_categoria[r["categoria"]] = por_categoria.get(r["categoria"], 0) + 1
-            por_bano[r["id_bano"]] = por_bano.get(r["id_bano"], 0) + 1
-            por_zona[r["zona"]] = por_zona.get(r["zona"], 0) + 1
+        for categoria, creado_en, id_bano_r, zona_r in rows:
+            por_categoria[categoria] = por_categoria.get(categoria, 0) + 1
+            por_bano[id_bano_r] = por_bano.get(id_bano_r, 0) + 1
+            por_zona[zona_r] = por_zona.get(zona_r, 0) + 1
 
-            # agrupa por DÍA LOCAL
             try:
-                dt_utc = parse_sqlite_ts_utc(r["creado_en"])
-                dloc = dt_utc.astimezone(tzinfo).date().isoformat()
+                dt = creado_en
+                if isinstance(dt, str):
+                    dt = datetime.datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                dloc = dt.astimezone(tzinfo).date().isoformat()
             except Exception:
-                dloc = r["creado_en"].split(" ")[0]
+                dloc = str(creado_en)[:10]
             por_dia[dloc] = por_dia.get(dloc, 0) + 1
 
         top_banos = sorted(
-            [{"id_bano": k, "nombre": banos_map.get(k, {}).get("nombre", k), "total": v}
-             for k, v in por_bano.items()],
-            key=lambda x: x["total"], reverse=True
+            [
+                {
+                    "id_bano": k,
+                    "nombre": banos_catalogo.get(k, {}).get("nombre", k),
+                    "total": v,
+                }
+                for k, v in por_bano.items()
+            ],
+            key=lambda x: x["total"],
+            reverse=True,
         )[:10]
 
-        return jsonify({
-            "total_reportes": total,
-            "por_categoria": por_categoria,
-            "por_bano": por_bano,
-            "por_dia": por_dia,
-            "por_zona": por_zona,
-            "top_banos": top_banos,
-            "banos_catalogo": banos_map
-        })
+        total = sum(por_categoria.values())
+        return jsonify(
+            {
+                "total_reportes": total,
+                "por_categoria": por_categoria,
+                "por_bano": por_bano,
+                "por_dia": por_dia,
+                "por_zona": por_zona,
+                "top_banos": top_banos,
+                "banos_catalogo": banos_catalogo,
+            }
+        )
 
     # --- Encuesta/kiosco sin QR ---
     @app.route("/encuesta")
@@ -290,7 +269,8 @@ def create_app():
     @app.route("/api/health")
     def health():
         try:
-            con = db(); con.execute("SELECT 1"); con.close()
+            with SessionLocal() as s:
+                _ = get_banos(s, solo_activos=False)
             return {"ok": True}
         except Exception as e:
             return {"ok": False, "err": str(e)}, 500
